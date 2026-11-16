@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>提词器 Teleprompter</title>
+<meta name="description" content="iPhone 提词器：自动滚动脚本、镜像、实时调参">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="提词器">
+<meta name="theme-color" content="#000000">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<link rel="stylesheet" href="assets/styles.css">
+</head>
+<body>
+
+<!-- ============ 准备台 ============ -->
+<section id="prepareScreen" class="screen">
+  <header class="app-bar">
+    <h1>提词器</h1>
+    <button class="icon-link" id="btnHelp" aria-label="使用说明">?</button>
+  </header>
+
+  <nav class="entry-bar">
+    <button class="entry-btn" id="btnNew">新建</button>
+    <button class="entry-btn" id="btnResume">继续上次</button>
+    <button class="entry-btn" id="btnLibrary">脚本库</button>
+  </nav>
+
+  <main class="prepare-main">
+    <section class="card">
+      <div class="card-head">
+        <h2>脚本</h2>
+        <div class="row-actions">
+          <button class="btn ghost small" id="btnImportTxt">导入 .txt</button>
+          <button class="btn ghost small" id="btnSample">示例</button>
+          <input type="file" id="fileInput" accept=".txt,text/plain" hidden>
+        </div>
+      </div>
+      <textarea id="scriptInput" placeholder="在此粘贴或输入提词内容，空行分段…"></textarea>
+      <div class="meta-row">
+        <span id="charCount">0 字</span>
+        <div class="row-actions">
+          <button class="btn ghost small" id="btnSaveScript">存为脚本</button>
+          <button class="btn ghost small" id="btnClear">清空</button>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <button class="disclosure" id="btnToggleSettings" aria-expanded="false">
+        <span>快速设置</span><span class="chev">▾</span>
+      </button>
+      <div id="settingsHost" class="settings-host collapsed"></div>
+    </section>
+
+    <section class="card">
+      <label class="field">
+        <span>开始倒计时 <b id="countdownValue">3</b> 秒</span>
+        <input type="range" id="countdown" min="0" max="10" step="1">
+      </label>
+    </section>
+
+    <p class="foot-note">iPhone：Safari 打开 → 分享 → 添加到主屏幕，图标点开即全屏提词。<br>「保持屏幕常亮」与离线缓存需 https 环境，局域网 http 下不生效。</p>
+  </main>
+
+  <footer class="action-bar">
+    <button class="btn primary big" id="btnStart">开始提词</button>
+  </footer>
+</section>
+
+<!-- 脚本库抽屉 -->
+<div class="sheet-backdrop" id="libraryBackdrop" hidden>
+  <div class="sheet" id="librarySheet">
+    <div class="sheet-head"><h2>脚本库</h2><button class="sheet-close" id="btnCloseLibrary">✕</button></div>
+    <ul id="scriptList" class="script-list"></ul>
+    <p class="sheet-empty" id="libraryEmpty">还没有保存的脚本。编辑好脚本后点「存为脚本」即可留存。</p>
+  </div>
+</div>
+
+<!-- ============ 提词态 ============ -->
+<section id="prompterScreen" class="screen hidden" data-theme="dark">
+  <div class="prompter-viewport" id="viewport">
+    <div class="prompter-content" id="prompterContent"></div>
+    <div class="countdown" id="countdownOverlay" hidden></div>
+  </div>
+
+  <div class="hud hud-top" id="hudTop">
+    <button class="hud-btn" id="btnExit">退出</button>
+    <span class="hud-status" id="hudStatus">已暂停</span>
+    <button class="hud-btn" id="btnOpenSheet">设置</button>
+  </div>
+
+  <div class="hud hud-bottom" id="hudBottom">
+    <button class="hud-btn wide" id="btnToggle">暂停</button>
+    <button class="hud-btn" id="btnSlower">慢</button>
+    <button class="hud-btn" id="btnFaster">快</button>
+  </div>
+
+  <div class="sheet-backdrop" id="sheetBackdrop" hidden>
+    <div class="sheet" id="settingsSheet">
+      <div class="sheet-head"><h2>实时设置</h2><button class="sheet-close" id="btnCloseSheet">收起</button></div>
+      <div id="sheetHost" class="settings-host"></div>
+    </div>
+  </div>
+
+  <div class="finish-overlay" id="finishOverlay" hidden>
+    <div class="finish-card">
+      <h2>提词完成</h2>
+      <div class="finish-actions">
+        <button class="btn primary" id="btnReplay">重播</button>
+        <button class="btn" id="btnBackPrepare">回到准备台</button>
+        <button class="btn" id="btnNextScript">下一条脚本</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 设置面板：在准备台与提词抽屉之间移动，保证唯一数据源 -->
+<template id="settingsPanelTemplate">
+  <div class="settings-panel" id="settingsPanel">
+    <div class="field-block">
+      <div class="field-label">配色主题</div>
+      <div class="theme-picker" id="themePicker">
+        <button class="theme-chip" data-theme="dark"><i class="sw sw-dark"></i>黑底白字</button>
+        <button class="theme-chip" data-theme="light"><i class="sw sw-light"></i>白底黑字</button>
+        <button class="theme-chip" data-theme="yellow"><i class="sw sw-yellow"></i>黑底黄字</button>
+      </div>
+    </div>
+
+    <label class="field">
+      <span>字号 <b id="fontSizeValue">48</b> px</span>
+      <input type="range" id="fontSize" min="20" max="96" step="2">
+    </label>
+
+    <label class="field">
+      <span>行距 <b id="lineHeightValue">1.6</b></span>
+      <input type="range" id="lineHeight" min="1.1" max="2.4" step="0.05">
+    </label>
+
+    <label class="field">
+      <span>边距 <b id="marginValue">5</b>%（左右留白）</span>
+      <input type="range" id="margin" min="0" max="18" step="1">
+    </label>
+
+    <div class="field-block">
+      <div class="field-label">滚动速度</div>
+      <div class="mode-switch" id="speedMode">
+        <button class="mode-btn" data-mode="cpm">字 / 分钟</button>
+        <button class="mode-btn" data-mode="px">像素 / 秒</button>
+      </div>
+      <label class="field">
+        <span id="speedCaption">语速 <b id="speedValue">300</b> 字 / 分</span>
+        <input type="range" id="speed" min="60" max="600" step="10">
+      </label>
+      <p class="field-hint" id="speedHint">≈ 228 px/s（换算值随字号联动）</p>
+    </div>
+
+    <label class="switch"><input type="checkbox" id="mirror"><span>水平镜像</span></label>
+    <label class="switch"><input type="checkbox" id="keepAwake"><span>保持屏幕常亮</span></label>
+  </div>
+</template>
+
+
+<!-- 使用说明 -->
+<div class="sheet-backdrop" id="helpBackdrop" hidden>
+  <div class="sheet" id="helpSheet">
+    <div class="sheet-head"><h2>使用说明</h2><button class="sheet-close" id="btnCloseHelp">✕</button></div>
+    <ul class="help-list">
+      <li><b>iPhone 全屏</b>：Safari 打开本页 → 分享 → 添加到主屏幕 → 从图标启动，即无地址栏全屏提词。</li>
+      <li><b>提词中调参</b>：点右上角「设置」升起抽屉，字号、边距、语速、主题即时生效，不会打断提词。</li>
+      <li><b>手动定位</b>：在文字区上下拖动可任意跳转，松手后自动继续滚动；轻点则隐藏控制条。</li>
+      <li><b>三套配色</b>：黑底白字（暗光）、白底黑字（室内亮光）、黑底黄字（强光下最醒目）。</li>
+      <li><b>语速</b>：默认按「字 / 分钟」计，随字号联动换算为像素速度；也可切换为「像素 / 秒」精调。</li>
+      <li><b>离线可用</b>：首次打开后即可断网使用，脚本与设置保存在本机浏览器中。</li>
+      <li><b>常亮与离线需 https</b>：浏览器仅在 https（或 localhost）下开放 Wake Lock 与 Service Worker；局域网 http 访问时这两项不可用，部署到公网 https 即完整可用。</li>
+    </ul>
+  </div>
+</div>
+<script src="assets/app.js"></script>
+</body>
+</html>
