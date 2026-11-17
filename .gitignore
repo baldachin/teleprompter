@@ -1,5 +1,7 @@
 node_modules/
 .chrome-capture/
 artifacts/
+.git-old/
+*.bak-*
 .DS_Store
 *.log

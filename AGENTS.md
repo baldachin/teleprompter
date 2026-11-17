@@ -35,7 +35,8 @@ Teleprompter：面向 iPhone 的滚动提词器，采用**零依赖静态 Web Ap
 
 - 改动后执行：`node --check assets/app.js` + `scripts/capture.ps1` 并人工查看截图。
 - 重点回归：滚动起停与到底停止、拖拽定位后自动续播、镜像翻转、主题切换、抽屉实时改参、完成态三动作、窄屏（375px）无横向溢出。
-- 调试参数：`?reset=1` 清空本地数据，`?panel=1`/`?sheet=1`/`?finish=1` 展开对应界面。Chrome 会缓存旧 JS，验证前先清 `.chrome-capture` profile。
+- 调试参数：`?reset=1` 清空本地数据，`?panel=1`/`?sheet=1`/`?finish=1` 展开对应界面，`?bold=1`/`?ls=3`/`?font=serif` 覆盖字体设置。Chrome 会缓存旧 JS，验证前先清 `.chrome-capture` profile。
+- 发布到 GitHub Pages 时，仓库根目录必须保留 `CNAME`（自定义域名），缺失会导致域名绑定失效。
 - 无自动化测试框架；新增逻辑保持函数纯度，便于后续接入 Vitest。
 
 ## 提交与合并请求规范

@@ -367,7 +367,7 @@ input[type="range"] {
   top: 0;
   left: 0;
   width: 100%;
-  padding: 42vh var(--tp-margin, 5%) 55vh;
+  padding: 50vh var(--tp-margin, 5%) 50vh;
   will-change: transform;
   font-size: 48px;
   line-height: 1.6;
@@ -375,11 +375,15 @@ input[type="range"] {
   color: var(--tp-text);
 }
 
-.prompter-lines { will-change: transform; }
+.prompter-lines {
+  position: relative;
+  z-index: 0;
+  will-change: transform;
+}
 .prompter-lines.mirror { transform: scaleX(-1); }
 .prompter-content p { margin: 0 0 0.35em; }
 .prompter-content p.spacer { height: 0.6em; }
-.prompter-content p.active { color: var(--tp-accent); }
+
 
 .hud {
   position: fixed;
@@ -457,3 +461,42 @@ input[type="range"] {
 .finish-actions { display: grid; gap: 10px; }
 .help-list { margin: 0; padding-left: 18px; display: grid; gap: 10px; font-size: 13px; line-height: 1.7; color: var(--muted); }
 .help-list b { color: var(--text); }
+/* ---------- 焦点行指示 ---------- */
+.focus-bar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  background: var(--tp-accent);
+  opacity: 0.26;
+  border-radius: 6px;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.focus-arrow {
+  position: absolute;
+  left: max(2px, calc(var(--tp-margin, 5%) - 16px));
+  width: 0;
+  height: 0;
+  border-top: 8px solid transparent;
+  border-bottom: 8px solid transparent;
+  border-left: 12px solid var(--tp-accent);
+  transform: translateY(-50%);
+  z-index: 1;
+  pointer-events: none;
+}
+
+
+/* ---------- 下拉选择 ---------- */
+.select {
+  width: 100%;
+  appearance: none;
+  -webkit-appearance: none;
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid #32323d;
+  border-radius: 10px;
+  padding: 10px 12px;
+  font: inherit;
+  font-size: 15px;
+}

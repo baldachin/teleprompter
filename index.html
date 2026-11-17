@@ -95,8 +95,6 @@
 
   <div class="hud hud-bottom" id="hudBottom">
     <button class="hud-btn wide" id="btnToggle">暂停</button>
-    <button class="hud-btn" id="btnSlower">慢</button>
-    <button class="hud-btn" id="btnFaster">快</button>
   </div>
 
   <div class="sheet-backdrop" id="sheetBackdrop" hidden>
@@ -143,6 +141,23 @@
     <label class="field">
       <span>边距 <b id="marginValue">5</b>%（左右留白）</span>
       <input type="range" id="margin" min="0" max="18" step="1">
+    </label>
+
+    <label class="field">
+      <span>字体</span>
+      <select id="font" class="select">
+        <option value="system">系统黑体（苹方）</option>
+        <option value="serif">系统宋体</option>
+        <option value="kai">系统楷体</option>
+        <option value="round">系统圆体</option>
+      </select>
+    </label>
+
+    <label class="switch"><input type="checkbox" id="bold"><span>加粗</span></label>
+
+    <label class="field">
+      <span>字距 <b id="letterSpacingValue">0</b> px</span>
+      <input type="range" id="letterSpacing" min="0" max="12" step="1">
     </label>
 
     <div class="field-block">

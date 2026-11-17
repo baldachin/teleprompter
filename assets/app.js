@@ -12,6 +12,13 @@
     px: { min: 10, max: 300, step: 5, unit: '像素 / 秒' }
   };
 
+  const FONT_FAMILY = {
+    system: '-apple-system, BlinkMacSystemFont, "PingFang SC", "Helvetica Neue", Arial, sans-serif',
+    serif: '"Songti SC", "SimSun", "Noto Serif CJK SC", Georgia, serif',
+    kai: '"Kaiti SC", "STKaiti", KaiTi, "Noto Serif CJK SC", serif',
+    round: '"Hiragino Maru Gothic ProN", "Yuanti SC", "PingFang SC", sans-serif'
+  };
+
   const DEFAULT_SETTINGS = {
     theme: 'dark',
     fontSize: 48,
@@ -21,7 +28,10 @@
     speed: 300,
     countdown: 3,
     mirror: false,
-    keepAwake: true
+    keepAwake: true,
+    font: 'system',
+    bold: false,
+    letterSpacing: 0
   };
 
   const SAMPLE_TEXT = [
@@ -56,6 +66,8 @@
 
   const dom = {};
   let settingsPanel = null;
+  let styleVersion = 0;
+  let lineCache = new Map();
 
   /* ---------------- 存储 ---------------- */
 
@@ -131,6 +143,22 @@
     bindRange(settingsPanel.querySelector('#lineHeight'), 'lineHeight');
     bindRange(settingsPanel.querySelector('#margin'), 'margin');
     bindRange(settingsPanel.querySelector('#speed'), 'speed');
+
+    settingsPanel.querySelector('#font').addEventListener('change', (event) => {
+      state.settings.font = event.target.value;
+      saveSettings();
+      syncSettingsUi();
+      applyPrompterStyles();
+    });
+
+    settingsPanel.querySelector('#bold').addEventListener('change', (event) => {
+      state.settings.bold = event.target.checked;
+      saveSettings();
+      syncSettingsUi();
+      applyPrompterStyles();
+    });
+
+    bindRange(settingsPanel.querySelector('#letterSpacing'), 'letterSpacing');
 
     settingsPanel.querySelector('#mirror').addEventListener('change', (event) => {
       state.settings.mirror = event.target.checked;
@@ -212,6 +240,11 @@
     speedInput.step = range.step;
     if (document.activeElement !== speedInput) speedInput.value = s.speed;
 
+    panel.querySelector('#font').value = s.font;
+    panel.querySelector('#bold').checked = !!s.bold;
+    const letterSpacingInput = panel.querySelector('#letterSpacing');
+    if (document.activeElement !== letterSpacingInput) letterSpacingInput.value = s.letterSpacing;
+    panel.querySelector('#letterSpacingValue').textContent = s.letterSpacing;
     panel.querySelector('#fontSizeValue').textContent = s.fontSize;
     panel.querySelector('#lineHeightValue').textContent = Number(s.lineHeight).toFixed(2);
     panel.querySelector('#marginValue').textContent = s.margin;
@@ -440,8 +473,7 @@
   function bindPrompterEvents() {
     dom.btnExit.addEventListener('click', exitPrompter);
     dom.btnToggle.addEventListener('click', () => (state.playing ? pause() : play()));
-    dom.btnSlower.addEventListener('click', () => adjustSpeed(-1));
-    dom.btnFaster.addEventListener('click', () => adjustSpeed(1));
+
 
     dom.btnOpenSheet.addEventListener('click', () => {
       mountSettingsPanel(dom.sheetHost);
@@ -475,6 +507,15 @@
       updateCharCount();
       saveJson(DRAFT_KEY, next.text);
       startPrompter();
+    });
+
+    window.addEventListener('resize', () => {
+      styleVersion += 1;
+      lineCache.clear();
+      if (!dom.prompterScreen.classList.contains('hidden')) {
+        measure();
+        render();
+      }
     });
 
     dom.viewport.addEventListener('pointerdown', onPointerDown);
@@ -565,6 +606,11 @@
     dom.prompterContent.style.fontSize = s.fontSize + 'px';
     dom.prompterContent.style.lineHeight = s.lineHeight;
     dom.prompterContent.style.setProperty('--tp-margin', s.margin + '%');
+    dom.prompterContent.style.fontFamily = FONT_FAMILY[s.font] || FONT_FAMILY.system;
+    dom.prompterContent.style.fontWeight = s.bold ? '700' : '400';
+    dom.prompterContent.style.letterSpacing = s.letterSpacing + 'px';
+    styleVersion += 1;
+    lineCache.clear();
 
     const lines = dom.prompterContent.querySelector('.prompter-lines');
     if (lines) lines.classList.toggle('mirror', !!s.mirror);
@@ -585,31 +631,83 @@
 
   function render() {
     dom.prompterContent.style.transform = 'translate3d(0,' + (-state.offset) + 'px,0)';
-    updateHighlight();
+    updateFocus();
     updateProgress();
   }
 
-  function updateHighlight() {
-    const lines = dom.prompterContent.querySelectorAll('.prompter-lines p:not(.spacer)');
-    if (!lines.length) return;
+  /**
+   * 取得某段落内部各行的位置（相对 .prompter-lines 容器），按段落缓存。
+   */
+  function getParagraphLines(p) {
+    if (lineCache.has(p)) return lineCache.get(p);
 
-    // 段落 offsetParent 是 .prompter-lines（带 transform），需换算回内容容器坐标
+    const range = document.createRange();
+    range.selectNodeContents(p);
+    const rects = Array.from(range.getClientRects()).filter((r) => r.height > 1);
+    const pRect = p.getBoundingClientRect();
+    const pTop = p.offsetTop;
+    const lines = rects.length
+      ? rects.map((r) => ({ top: pTop + (r.top - pRect.top), height: r.height }))
+      : [{ top: pTop, height: p.offsetHeight }];
+
+    lineCache.set(p, lines);
+    return lines;
+  }
+
+  /**
+   * 当前阅读行高亮：红色底色 + 左侧箭头。
+   * 阅读线固定在屏幕正中，按「行」而非「段」判定；
+   * 阅读线落在段末/空行等空隙时，落到「下一行」而不是回退上一行。
+   */
+  function updateFocus() {
     const wrap = dom.prompterContent.querySelector('.prompter-lines');
-    const wrapTop = wrap ? wrap.offsetTop : 0;
-    const target = state.offset + wrapTop;
+    if (!wrap) return;
 
-    let active = null;
+    const viewportHeight = dom.viewport.clientHeight || window.innerHeight;
+    const target = state.offset + viewportHeight * 0.5 - wrap.offsetTop;
+
+    const paragraphs = wrap.querySelectorAll('p:not(.spacer)');
+    let chosen = null;
     let upcoming = null;
-    lines.forEach((p) => {
-      const top = wrapTop + p.offsetTop;
-      const bottom = top + p.offsetHeight;
-      if (!active && top <= target && bottom > target) active = p;
-      if (!upcoming && top > target) upcoming = p;
-    });
-    if (!active) active = upcoming;
 
-    lines.forEach((p) => p.classList.remove('active'));
-    if (active) active.classList.add('active');
+    for (const p of paragraphs) {
+      const lines = getParagraphLines(p);
+      for (const line of lines) {
+        if (line.top <= target && line.top + line.height > target) { chosen = line; break; }
+        if (!upcoming && line.top > target) { upcoming = line; break; }
+      }
+      if (chosen || upcoming) break;
+    }
+
+    applyFocusBar(chosen || upcoming);
+  }
+
+  function applyFocusBar(line) {
+    const wrap = dom.prompterContent.querySelector('.prompter-lines');
+    if (!wrap) return;
+    const content = dom.prompterContent;
+    let bar = wrap.querySelector('.focus-bar');
+    let arrow = content.querySelector('.focus-arrow');
+    if (!bar) {
+      bar = document.createElement('div');
+      bar.className = 'focus-bar';
+      wrap.appendChild(bar);
+    }
+    if (!arrow) {
+      arrow = document.createElement('div');
+      arrow.className = 'focus-arrow';
+      content.appendChild(arrow);
+    }
+    if (!line) {
+      bar.style.display = 'none';
+      arrow.style.display = 'none';
+      return;
+    }
+    bar.style.display = 'block';
+    arrow.style.display = 'block';
+    bar.style.top = line.top + 'px';
+    bar.style.height = line.height + 'px';
+    arrow.style.top = (wrap.offsetTop + line.top + line.height / 2) + 'px';
   }
 
   function updateProgress() {
@@ -839,6 +937,17 @@
     if (params.get('mirror') === '1') {
       state.settings.mirror = true;
     }
+    if (params.get('bold') === '1') {
+      state.settings.bold = true;
+    }
+    const letterSpacing = parseInt(params.get('ls'), 10);
+    if (letterSpacing >= 0 && letterSpacing <= 12) {
+      state.settings.letterSpacing = letterSpacing;
+    }
+    const font = params.get('font');
+    if (font && FONT_FAMILY[font]) {
+      state.settings.font = font;
+    }
     saveSettings();
     restoreSettingsToUi();
     applyPrompterStyles();
@@ -861,6 +970,14 @@
       });
     }
   }
+
+  // 调试钩子：供自动化验证使用，不影响正常使用
+  window.__teleprompter = {
+    state: state,
+    dom: dom,
+    render: render,
+    updateFocus: updateFocus
+  };
 
   document.addEventListener('DOMContentLoaded', init);
 })();
